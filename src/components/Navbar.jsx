@@ -1,41 +1,40 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 export default function Navbar() {
+  const navigate = useNavigate();
+
   return (
-    <nav style={styles.nav}>
-      <h1 style={styles.logo}>🐶 DoggoLoggo</h1>
-      <div style={styles.links}>
-        <Link to="/dashboard" style={styles.link}>Dashboard</Link>
-        <Link to="/calendar" style={styles.link}>Calendar</Link>
+    <div style={styles.nav}>
+      <div style={styles.brand} onClick={() => navigate('/')}>🐶 DoggoLoggo</div>
+      <div style={styles.actions}>
+        <button style={styles.btn} onClick={() => navigate('/dashboard')}>Dashboard</button>
       </div>
-    </nav>
+    </div>
   );
 }
 
 const styles = {
   nav: {
-    width: "100%",
-    backgroundColor: "var(--brown)",
-    color: "white",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "15px 30px",
-    boxShadow: "0 3px 8px rgba(0,0,0,0.1)",
-    marginBottom: "25px",
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 20px',
+    backgroundColor: 'var(--white)',
+    boxShadow: '0 1px 6px rgba(0,0,0,0.06)',
   },
-  logo: {
-    margin: 0,
-    fontSize: "1.5rem",
+  brand: {
+    fontWeight: '700',
+    color: 'var(--brown)',
+    cursor: 'pointer',
   },
-  links: {
-    display: "flex",
-    gap: "20px",
-  },
-  link: {
-    color: "var(--yellow)",
-    textDecoration: "none",
-    fontWeight: "bold",
+  actions: {},
+  btn: {
+    backgroundColor: 'var(--yellow)',
+    color: 'white',
+    border: 'none',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    cursor: 'pointer',
   },
 };

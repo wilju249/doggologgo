@@ -2,6 +2,7 @@ import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import mockData from "../data/mockData";
 import GraphPlaceholder from "../components/GraphPlaceholder";
+import Navbar from "../components/Navbar";
 
 export default function DogPage() {
   const { id } = useParams();
@@ -11,17 +12,20 @@ export default function DogPage() {
   if (!dog) return <p>Dog not found!</p>;
 
   return (
-    <div style={styles.page}>
-      <button onClick={() => navigate(-1)} style={styles.backBtn}>← Back</button>
-      <div style={styles.card}>
-        <img src={dog.photo} alt={dog.name} style={styles.photo} />
-        <h1 style={styles.name}>{dog.name}</h1>
-        <p>Age: {dog.age} years</p>
-        <p>Favorite food: {dog.favoriteFood}</p>
-        <GraphPlaceholder title="Food Intake (Last 7 days)" />
-        <GraphPlaceholder title="Water Intake (Last 7 days)" />
+    <>
+      <Navbar />
+      <div style={styles.page}>
+        <button onClick={() => navigate(-1)} style={styles.backBtn}>← Back</button>
+        <div style={styles.card}>
+          <img src={dog.photo} alt={dog.name} style={styles.photo} />
+          <h1 style={styles.name}>{dog.name}</h1>
+          <p>Age: {dog.age} years</p>
+          <p>Favorite food: {dog.favoriteFood}</p>
+          <GraphPlaceholder title="Food Intake (Last 7 days)" />
+          <GraphPlaceholder title="Water Intake (Last 7 days)" />
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

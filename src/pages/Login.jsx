@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Navbar from "../components/Navbar";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -13,31 +14,34 @@ export default function Login() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>🐶 DoggoLoggo</h1>
-        <p style={styles.subtitle}>Log in to keep your doggo happy</p>
-        <form onSubmit={handleLogin} style={styles.form}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={styles.input}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={styles.input}
-          />
-          <button type="submit" style={styles.button}>
-            Log In
-          </button>
-        </form>
+    <>
+      <Navbar />
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>🐶 DoggoLoggo</h1>
+          <p style={styles.subtitle}>Log in to keep your doggo happy</p>
+          <form onSubmit={handleLogin} style={styles.form}>
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              style={styles.input}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={styles.input}
+            />
+            <button type="submit" style={styles.button}>
+              Log In
+            </button>
+          </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
