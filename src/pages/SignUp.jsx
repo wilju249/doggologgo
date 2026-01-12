@@ -1,23 +1,34 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-export default function Login() {
+export default function SignUp() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleSignUp = (e) => {
     e.preventDefault();
     // no real auth yet
-    if (email && password) navigate("/dashboard");
+    if (name && email && password && confirmPassword && password === confirmPassword) {
+      navigate("/dashboard");
+    }
   };
 
   return (
     <div style={styles.container}>
       <div style={styles.card}>
         <h1 style={styles.title}>🐶 DoggoLoggo</h1>
-        <p style={styles.subtitle}>Log in to keep your doggo happy</p>
-        <form onSubmit={handleLogin} style={styles.form}>
+        <p style={styles.subtitle}>Create an account for your doggo</p>
+        <form onSubmit={handleSignUp} style={styles.form}>
+          <input
+            type="text"
+            placeholder="Full Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={styles.input}
+          />
           <input
             type="email"
             placeholder="Email"
@@ -32,14 +43,21 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
             style={styles.input}
           />
+          <input
+            type="password"
+            placeholder="Confirm Password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            style={styles.input}
+          />
           <button type="submit" style={styles.button}>
-            Log In
+            Sign Up
           </button>
         </form>
         <p style={styles.linkText}>
-          Don't have an account?{" "}
-          <a href="/signup" style={styles.link}>
-            Sign up here
+          Already have an account?{" "}
+          <a href="/" style={styles.link}>
+            Log in here
           </a>
         </p>
       </div>
