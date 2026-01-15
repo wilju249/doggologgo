@@ -1,18 +1,50 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 
 export default function SignUp() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleSignUp = (e) => {
+  const handleSignUp = async (e) => {
     e.preventDefault();
-    // no real auth yet
-    if (name && email && password && confirmPassword && password === confirmPassword) {
+    setError("");
+    setLoading(true);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      if (!isSupabaseConfigured()) {
+        // Fallback: if Supabase not configured, allow any non-empty input
+        if (name && email && password && confirmPassword) navigate("/dashboard");
+        return;
+      }
+
+      const { error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) {
+        setError(authError.message);
+        setLoading(false);
+        return;
+      }
+
       navigate("/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -21,6 +53,7 @@ export default function SignUp() {
       <div style={styles.card}>
         <h1 style={styles.title}>🐶 DoggoLoggo</h1>
         <p style={styles.subtitle}>Create an account for your doggo</p>
+        {error && <p style={styles.error}>{error}</p>}
         <form onSubmit={handleSignUp} style={styles.form}>
           <input
             type="text"
@@ -50,8 +83,8 @@ export default function SignUp() {
             onChange={(e) => setConfirmPassword(e.target.value)}
             style={styles.input}
           />
-          <button type="submit" style={styles.button}>
-            Sign Up
+          <button type="submit" style={styles.button} disabled={loading}>
+            {loading ? "Creating account..." : "Sign Up"}
           </button>
         </form>
         <p style={styles.linkText}>
@@ -83,6 +116,7 @@ const styles = {
   },
   title: { color: "var(--brown)", marginBottom: "10px" },
   subtitle: { color: "#777", marginBottom: "20px" },
+  error: { color: "#d32f2f", fontSize: "0.9rem", marginBottom: "10px" },
   form: { display: "flex", flexDirection: "column", gap: "15px" },
   input: { fontSize: "1rem", padding: "10px" },
   button: {

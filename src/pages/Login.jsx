@@ -1,15 +1,43 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // no real auth yet
-    if (email && password) navigate("/dashboard");
+    setError("");
+    setLoading(true);
+
+    try {
+      if (!isSupabaseConfigured()) {
+        // Fallback: if Supabase not configured, allow any non-empty input
+        if (email && password) navigate("/dashboard");
+        return;
+      }
+
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        setError(authError.message);
+        setLoading(false);
+        return;
+      }
+
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -17,6 +45,7 @@ export default function Login() {
       <div style={styles.card}>
         <h1 style={styles.title}>🐶 DoggoLoggo</h1>
         <p style={styles.subtitle}>Log in to keep your doggo happy</p>
+        {error && <p style={styles.error}>{error}</p>}
         <form onSubmit={handleLogin} style={styles.form}>
           <input
             type="email"
@@ -32,8 +61,8 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
             style={styles.input}
           />
-          <button type="submit" style={styles.button}>
-            Log In
+          <button type="submit" style={styles.button} disabled={loading}>
+            {loading ? "Logging in..." : "Log In"}
           </button>
         </form>
         <p style={styles.linkText}>
@@ -65,6 +94,7 @@ const styles = {
   },
   title: { color: "var(--brown)", marginBottom: "10px" },
   subtitle: { color: "#777", marginBottom: "20px" },
+  error: { color: "#d32f2f", fontSize: "0.9rem", marginBottom: "10px" },
   form: { display: "flex", flexDirection: "column", gap: "15px" },
   input: { fontSize: "1rem", padding: "10px" },
   button: {
