@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
 export default function SignUp() {
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -41,7 +42,8 @@ export default function SignUp() {
         password,
         options: {
           data: {
-            first_name: name,
+            first_name: firstName,
+            last_name: lastName,
           },
         },
       });
@@ -69,9 +71,16 @@ export default function SignUp() {
         <form onSubmit={handleSignUp} style={styles.form}>
           <input
             type="text"
-            placeholder="Full Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            placeholder="First Name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            style={styles.input}
+          />
+          <input
+            type="text"
+            placeholder="Last Name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
             style={styles.input}
           />
           <input

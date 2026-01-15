@@ -27,10 +27,11 @@ export default function Dashboard() {
 
         setUser(currentUser);
 
-        // Get first name from user metadata
-        const userFirstName =
-          currentUser.user_metadata?.first_name || currentUser.email?.split("@")[0] || "User";
-        setFirstName(userFirstName);
+        // Get first and last name from user metadata
+        const first = currentUser.user_metadata?.first_name || "";
+        const last = currentUser.user_metadata?.last_name || "";
+        const displayName = `${first} ${last}`.trim() || currentUser.email?.split("@")[0] || "User";
+        setFirstName(displayName);
 
         // Fetch dogs for this user
         const { data, error } = await supabase
