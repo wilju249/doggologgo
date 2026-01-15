@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
+import { supabase } from "../lib/supabaseClient";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -9,18 +9,25 @@ export default function Login() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  // Check if already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        navigate("/dashboard");
+      }
+    };
+    checkUser();
+  }, [navigate]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      if (!isSupabaseConfigured()) {
-        // Fallback: if Supabase not configured, allow any non-empty input
-        if (email && password) navigate("/dashboard");
-        return;
-      }
-
       const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,

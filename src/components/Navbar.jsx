@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 
-export default function Navbar() {
+export default function Navbar({ onLogout }) {
   const navigate = useNavigate();
 
   return (
@@ -9,6 +9,7 @@ export default function Navbar() {
       <div style={styles.brand} onClick={() => navigate('/')}>🐶 DoggoLoggo</div>
       <div style={styles.actions}>
         <button style={styles.btn} onClick={() => navigate('/dashboard')}>Dashboard</button>
+        {onLogout && <button style={styles.logoutBtn} onClick={onLogout}>Log Out</button>}
       </div>
     </div>
   );
@@ -28,9 +29,17 @@ const styles = {
     color: 'var(--brown)',
     cursor: 'pointer',
   },
-  actions: {},
+  actions: { display: 'flex', gap: '10px', alignItems: 'center' },
   btn: {
     backgroundColor: 'var(--yellow)',
+    color: 'white',
+    border: 'none',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+  },
+  logoutBtn: {
+    backgroundColor: '#d32f2f',
     color: 'white',
     border: 'none',
     padding: '8px 12px',

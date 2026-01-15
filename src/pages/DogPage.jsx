@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import mockData from "../data/mockData";
 import GraphPlaceholder from "../components/GraphPlaceholder";
-import { supabase, isSupabaseConfigured } from "../lib/supabaseClient";
+import { supabase } from "../lib/supabaseClient";
 import Navbar from "../components/Navbar";
 
 export default function DogPage() {
@@ -13,55 +12,48 @@ export default function DogPage() {
 
   useEffect(() => {
     const fetchDog = async () => {
-      // Try Supabase first
-      if (isSupabaseConfigured()) {
-        try {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-          if (!user) {
-            // Not logged in, use mock data
-            const mockDog = mockData.dogs.find((d) => d.id.toString() === id);
-            setDog(mockDog);
-            setLoading(false);
-            return;
-          }
-
-          const { data, error } = await supabase
-            .from("dogs")
-            .select("*")
-            .eq("id", id)
-            .eq("owner", user.id)
-            .single();
-
-          if (error || !data) {
-            // Fall back to mock data if not found
-            const mockDog = mockData.dogs.find((d) => d.id.toString() === id);
-            setDog(mockDog);
-          } else {
-            setDog(data);
-          }
-        } catch (err) {
-          console.error("Fetch error:", err);
-          const mockDog = mockData.dogs.find((d) => d.id.toString() === id);
-          setDog(mockDog);
+        if (!user) {
+          navigate("/");
+          return;
         }
-      } else {
-        // Supabase not configured, use mock data
-        const mockDog = mockData.dogs.find((d) => d.id.toString() === id);
-        setDog(mockDog);
-      }
 
-      setLoading(false);
+        const { data, error } = await supabase
+          .from("dogs")
+          .select("*")
+          .eq("id", id)
+          .eq("owner", user.id)
+          .single();
+
+        if (error || !data) {
+          console.error("Dog not found:", error);
+          setDog(null);
+        } else {
+          setDog(data);
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+        navigate("/dashboard");
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchDog();
-  }, [id]);
+  }, [id, navigate]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
 
   return (
     <>
-      <Navbar />
+      <Navbar onLogout={handleLogout} />
       <div style={styles.page}>
         {loading ? (
           <p style={styles.loading}>Loading...</p>
@@ -69,12 +61,14 @@ export default function DogPage() {
           <p style={styles.notFound}>Dog not found!</p>
         ) : (
           <>
-            <button onClick={() => navigate(-1)} style={styles.backBtn}>← Back</button>
+            <button onClick={() => navigate(-1)} style={styles.backBtn}>
+              ← Back
+            </button>
             <div style={styles.card}>
               <img src={dog.photo} alt={dog.name} style={styles.photo} />
               <h1 style={styles.name}>{dog.name}</h1>
-              <p>Age: {dog.age} years</p>
-              <p>Favorite food: {dog.favoriteFood}</p>
+              {dog.age && <p>Age: {dog.age} years</p>}
+              {dog.breed && <p>Breed: {dog.breed}</p>}
               <GraphPlaceholder title="Food Intake (Last 7 days)" />
               <GraphPlaceholder title="Water Intake (Last 7 days)" />
             </div>
