@@ -14,6 +14,7 @@ export default function DogPage() {
   const [formData, setFormData] = useState({ name: "", birthdate: "", photo: "", weight_kg: "" });
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState("");
+  const [feedingEvents, setFeedingEvents] = useState([]);
 
   useEffect(() => {
     const fetchDog = async () => {
@@ -209,6 +210,20 @@ export default function DogPage() {
     navigate("/");
   };
 
+  const addFeedingEvent = () => {
+    setFeedingEvents([...feedingEvents, { time: "08:00", amount: 100 }]);
+  };
+
+  const updateFeedingEvent = (index, field, value) => {
+    const updated = [...feedingEvents];
+    updated[index][field] = value;
+    setFeedingEvents(updated);
+  };
+
+  const removeFeedingEvent = (index) => {
+    setFeedingEvents(feedingEvents.filter((_, i) => i !== index));
+  };
+
   return (
     <>
       <Navbar onLogout={handleLogout} />
@@ -249,6 +264,39 @@ export default function DogPage() {
 
                   <GraphPlaceholder title="Food Intake (Last 7 days)" />
                   <GraphPlaceholder title="Water Intake (Last 7 days)" />
+
+                  <div style={styles.feedingSection}>
+                    <h2 style={styles.feedingTitle}>Feeding Schedule</h2>
+                    <p style={styles.feedingDesc}>Set daily feeding times and amounts (repeats every day)</p>
+                    
+                    {feedingEvents.length === 0 ? (
+                      <p style={styles.noEvents}>No feeding events set. Add one below.</p>
+                    ) : (
+                      <div style={styles.eventsList}>
+                        {feedingEvents.map((event, index) => (
+                          <div key={index} style={styles.eventItem}>
+                            <input
+                              type="time"
+                              value={event.time}
+                              onChange={(e) => updateFeedingEvent(index, 'time', e.target.value)}
+                              style={styles.timeInput}
+                            />
+                            <input
+                              type="number"
+                              min="1"
+                              value={event.amount}
+                              onChange={(e) => updateFeedingEvent(index, 'amount', parseInt(e.target.value) || 0)}
+                              style={styles.amountInput}
+                              placeholder="grams"
+                            />
+                            <button onClick={() => removeFeedingEvent(index)} style={styles.removeBtn}>Remove</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <button onClick={addFeedingEvent} style={styles.addEventBtn}>+ Add Feeding Event</button>
+                  </div>
                 </>
               ) : (
                 <div style={styles.editForm}>
@@ -359,4 +407,14 @@ const styles = {
   fileInput: { fontSize: "0.9rem", padding: "6px" },
   preview: { marginTop: "10px", maxWidth: "200px", borderRadius: "8px", objectFit: "cover" },
   debugBtn: { backgroundColor: "#555", color: "white", border: "none", padding: "8px 10px", borderRadius: "8px", cursor: "pointer" },
+  feedingSection: { marginTop: "30px", textAlign: "left" },
+  feedingTitle: { color: "var(--brown)", marginBottom: "10px" },
+  feedingDesc: { color: "#666", fontSize: "0.9rem", marginBottom: "15px" },
+  noEvents: { color: "#777", fontStyle: "italic" },
+  eventsList: { marginBottom: "15px" },
+  eventItem: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px", padding: "10px", backgroundColor: "#f9f9f9", borderRadius: "8px" },
+  timeInput: { padding: "6px", borderRadius: "4px", border: "1px solid #ddd", width: "120px" },
+  amountInput: { padding: "6px", borderRadius: "4px", border: "1px solid #ddd", width: "80px" },
+  removeBtn: { backgroundColor: "#d32f2f", color: "white", border: "none", padding: "6px 10px", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" },
+  addEventBtn: { backgroundColor: "var(--yellow)", color: "white", border: "none", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" },
 };

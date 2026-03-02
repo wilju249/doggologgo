@@ -29,7 +29,7 @@ export default function Dashboard() {
         setUser(currentUser);
 
         // Get first and last name from user metadata
-        const first = currentUser.raw_user_meta_data?.first_name || "";
+        const first = currentUser.user_metadata?.first_name || "";
         setFirstName(first);
 
         // Fetch dogs for this user
