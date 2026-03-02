@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import GraphPlaceholder from "../components/GraphPlaceholder";
 import { supabase } from "../lib/supabaseClient";
+import { uploadDogPhoto, getPublicUrl, listDogPhotos } from "../lib/storageClient";
 import Navbar from "../components/Navbar";
 
 export default function DogPage() {
@@ -9,6 +10,10 @@ export default function DogPage() {
   const navigate = useNavigate();
   const [dog, setDog] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [formData, setFormData] = useState({ name: "", birthdate: "", photo: "", weight_kg: "" });
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState("");
 
   useEffect(() => {
     const fetchDog = async () => {
@@ -33,7 +38,13 @@ export default function DogPage() {
           console.error("Dog not found:", error);
           setDog(null);
         } else {
-          setDog(data);
+          // resolve photo URL (public or signed) for display
+          try {
+            const resolved = data.photo ? await getPublicUrl(data.photo) : null;
+            setDog({ ...data, resolvedPhoto: resolved });
+          } catch (e) {
+            setDog(data);
+          }
         }
       } catch (err) {
         console.error("Fetch error:", err);
@@ -45,6 +56,153 @@ export default function DogPage() {
 
     fetchDog();
   }, [id, navigate]);
+
+  function computeAgeFromBirthdate(birthdate) {
+    if (!birthdate) return null;
+    try {
+      const b = new Date(birthdate);
+      if (Number.isNaN(b.getTime())) return null;
+      const now = new Date();
+      let years = now.getFullYear() - b.getFullYear();
+      const m = now.getMonth() - b.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < b.getDate())) years--;
+      return years >= 0 ? years : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function resolvePhotoSrc(photo) {
+    const placeholder = `https://placedog.net/400/400?id=${dog.id}`;
+    if (editMode && photoPreview) {
+      console.debug("[DogPage] using preview image");
+      return photoPreview;
+    }
+    const p = photo || "";
+    if (!p) return placeholder;
+    if (p.startsWith("http")) {
+      console.debug(`[DogPage] photo is full URL: ${p}`);
+      return p;
+    }
+    // prefer resolvedPhoto computed at fetch time (may be signed or public)
+    if (dog?.resolvedPhoto) return dog.resolvedPhoto;
+    try {
+      const { data: publicUrlData } = supabase.storage.from("dogs").getPublicUrl(p);
+      console.debug(`[DogPage] resolved storage path ${p} -> ${publicUrlData?.publicUrl}`);
+      return publicUrlData?.publicUrl || placeholder;
+    } catch (err) {
+      console.warn("[DogPage] getPublicUrl error:", err);
+      return placeholder;
+    }
+  }
+
+  const listBucketFiles = async () => {
+    try {
+      const { data, error } = await supabase.storage.from("dogs").list("", { limit: 100 });
+      console.debug("[Storage list] data:", data, "error:", error);
+      alert("Listed bucket files to console (check DevTools)");
+    } catch (err) {
+      console.error("[Storage list] failed:", err);
+      alert("Storage list failed - check console");
+    }
+  };
+
+  const handleEditToggle = () => {
+    if (!editMode && dog) {
+      setFormData({
+        name: dog.name || "",
+        birthdate: dog.birthdate || "",
+        photo: dog.photo || "",
+        weight_kg: dog.weight_kg ?? "",
+      });
+      setPhotoPreview(dog.photo || "");
+      setPhotoFile(null);
+    }
+    setEditMode((s) => !s);
+  };
+
+  const handlePhotoFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setPhotoPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((p) => ({ ...p, [name]: value }));
+  };
+
+  const handleSave = async () => {
+    try {
+      setLoading(true);
+      const updates = {
+        name: formData.name.trim(),
+        birthdate: formData.birthdate || null,
+        photo: formData.photo || null,
+        weight_kg: formData.weight_kg === "" ? null : parseFloat(formData.weight_kg),
+      };
+
+      // If a new file was selected, upload it to storage and use that URL
+      if (photoFile) {
+        try {
+          const currentUser = (await supabase.auth.getUser())?.data?.user;
+          const res = await uploadDogPhoto(photoFile, currentUser?.id);
+          console.debug("[DogPage] uploadDogPhoto result:", res);
+          if (res?.error) {
+            console.warn("Photo upload failed:", res.error);
+          } else {
+            updates.photo = res.filePath;
+            // update bucket list debug info
+            const listRes = await listDogPhotos("dog-photos");
+            console.debug("[DogPage] listDogPhotos:", listRes);
+          }
+        } catch (uploadErr) {
+          console.warn("Photo upload failed, continuing without photo:", uploadErr);
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("dogs")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Update error:", error);
+      } else {
+        setDog(data);
+        setEditMode(false);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    const ok = window.confirm("Delete this dog? This action cannot be undone.");
+    if (!ok) return;
+
+    try {
+      setLoading(true);
+      const { error } = await supabase.from("dogs").delete().eq("id", id);
+      if (error) {
+        console.error("Delete error:", error);
+      } else {
+        navigate("/dashboard");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -65,12 +223,65 @@ export default function DogPage() {
               ← Back
             </button>
             <div style={styles.card}>
-              <img src={dog.photo} alt={dog.name} style={styles.photo} />
-              <h1 style={styles.name}>{dog.name}</h1>
-              {dog.age && <p>Age: {dog.age} years</p>}
-              {dog.breed && <p>Breed: {dog.breed}</p>}
-              <GraphPlaceholder title="Food Intake (Last 7 days)" />
-              <GraphPlaceholder title="Water Intake (Last 7 days)" />
+              <img src={resolvePhotoSrc(dog.photo)} alt={dog.name} style={styles.photo} />
+
+              {!editMode ? (
+                <>
+                  <h1 style={styles.name}>{dog.name}</h1>
+                  {dog.birthdate || dog.age ? (
+                    <p>
+                      Age: {dog.birthdate ? computeAgeFromBirthdate(dog.birthdate) : dog.age} years
+                    </p>
+                  ) : null}
+                  {dog.breed && <p>Breed: {dog.breed}</p>}
+
+                  <div style={styles.actionsRow}>
+                    <button onClick={handleEditToggle} style={styles.editBtn} disabled={loading}>
+                      Edit
+                    </button>
+                    <button onClick={handleDelete} style={styles.deleteBtn} disabled={loading}>
+                      Delete
+                    </button>
+                    <button onClick={listBucketFiles} style={styles.debugBtn}>
+                      Debug: list bucket
+                    </button>
+                  </div>
+
+                  <GraphPlaceholder title="Food Intake (Last 7 days)" />
+                  <GraphPlaceholder title="Water Intake (Last 7 days)" />
+                </>
+              ) : (
+                <div style={styles.editForm}>
+                  <div style={styles.formRow}>
+                    <label style={styles.label}>Name</label>
+                    <input name="name" value={formData.name} onChange={handleChange} style={styles.input} />
+                  </div>
+                  <div style={styles.formRow}>
+                    <label style={styles.label}>Birthdate</label>
+                    <input name="birthdate" type="date" value={formData.birthdate || ""} onChange={handleChange} style={styles.input} />
+                  </div>
+                  <div style={styles.formRow}>
+                    <label style={styles.label}>Weight (kg)</label>
+                    <input name="weight_kg" type="number" step="0.1" value={formData.weight_kg ?? ""} onChange={handleChange} style={styles.input} />
+                  </div>
+                  <div style={styles.formRow}>
+                    <label style={styles.label}>Upload Photo</label>
+                    <input type="file" id="photo-file" accept="image/*" onChange={handlePhotoFileChange} style={styles.fileInput} />
+                    {photoPreview ? (
+                      <img src={photoPreview} alt="Preview" style={styles.preview} />
+                    ) : null}
+                  </div>
+
+                  <div style={styles.actionsRow}>
+                    <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
+                      Save
+                    </button>
+                    <button onClick={handleEditToggle} style={styles.cancelBtn} disabled={loading}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -108,4 +319,44 @@ const styles = {
     objectFit: "cover",
   },
   name: { color: "var(--brown)" },
+  actionsRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "10px",
+    marginTop: "12px",
+    marginBottom: "12px",
+  },
+  editBtn: {
+    backgroundColor: "#1976d2",
+    color: "white",
+    border: "none",
+    padding: "8px 12px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  deleteBtn: {
+    backgroundColor: "#d32f2f",
+    color: "white",
+    border: "none",
+    padding: "8px 12px",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  editForm: { textAlign: "left", marginTop: "10px" },
+  formRow: { display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" },
+  label: { fontWeight: 600, color: "var(--brown)" },
+  input: { padding: "8px", borderRadius: "8px", border: "1px solid #ddd", fontSize: "1rem" },
+  saveBtn: {
+    backgroundColor: "var(--yellow)",
+    color: "white",
+    border: "none",
+    padding: "8px 12px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "600",
+  },
+  cancelBtn: { backgroundColor: "#ccc", color: "#222", border: "none", padding: "8px 12px", borderRadius: "8px", cursor: "pointer" },
+  fileInput: { fontSize: "0.9rem", padding: "6px" },
+  preview: { marginTop: "10px", maxWidth: "200px", borderRadius: "8px", objectFit: "cover" },
+  debugBtn: { backgroundColor: "#555", color: "white", border: "none", padding: "8px 10px", borderRadius: "8px", cursor: "pointer" },
 };

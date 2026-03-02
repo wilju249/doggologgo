@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DogCard from "../components/DogCard";
 import { supabase } from "../lib/supabaseClient";
+import { getPublicUrl } from "../lib/storageClient";
 import Navbar from "../components/Navbar";
 
 export default function Dashboard() {
@@ -28,10 +29,8 @@ export default function Dashboard() {
         setUser(currentUser);
 
         // Get first and last name from user metadata
-        const first = currentUser.user_metadata?.first_name || "";
-        const last = currentUser.user_metadata?.last_name || "";
-        const displayName = `${first} ${last}`.trim() || currentUser.email?.split("@")[0] || "User";
-        setFirstName(displayName);
+        const first = currentUser.raw_user_meta_data?.first_name || "";
+        setFirstName(first);
 
         // Fetch dogs for this user
         const { data, error } = await supabase
@@ -42,7 +41,25 @@ export default function Dashboard() {
         if (error) {
           console.error("Error fetching dogs:", error);
         } else if (data) {
-          setDogs(data);
+          // resolve public/signed URLs for storage-backed photos
+          try {
+            const enriched = await Promise.all(
+              data.map(async (d) => {
+                if (d.photo && !d.photo.startsWith("http")) {
+                  try {
+                    const resolved = await getPublicUrl(d.photo);
+                    return { ...d, resolvedPhoto: resolved };
+                  } catch (e) {
+                    return d;
+                  }
+                }
+                return d;
+              })
+            );
+            setDogs(enriched);
+          } catch (e) {
+            setDogs(data);
+          }
         }
       } catch (err) {
         console.error("Fetch error:", err);
@@ -64,20 +81,21 @@ export default function Dashboard() {
       <Navbar onLogout={handleLogout} />
       <div style={styles.page}>
         <div style={styles.header}>
-          <h1 style={styles.title}>Welcome back, {firstName} 👋</h1>
-          <button style={styles.logoutBtn} onClick={handleLogout}>
-            Log Out
-          </button>
+          <h1 style={styles.title}>Welcome back, {firstName}</h1>
         </div>
-        <h2 style={styles.subtitle}>Your Dogs</h2>
+        <div style={styles.dogHeaderContainer}>
+          <h2 style={styles.subtitle}>Your Dogs</h2>
+          {!loading && (
+            <button style={styles.addDogBtn} onClick={() => navigate("/add-dog")}>
+              + Add Dog
+            </button>
+          )}
+        </div>
         {loading ? (
           <p style={styles.loading}>Loading...</p>
         ) : dogs.length === 0 ? (
           <div style={styles.noDogsContainer}>
             <p style={styles.noDogs}>No dogs yet. Add one to get started!</p>
-            <button style={styles.addDogBtn} onClick={() => navigate("/add-dog")}>
-              + Add Your First Dog
-            </button>
           </div>
         ) : (
           <div style={styles.dogGrid}>
@@ -104,7 +122,14 @@ const styles = {
     cursor: "pointer",
     fontSize: "0.9rem",
   },
-  subtitle: { marginTop: "20px", marginBottom: "10px", color: "var(--light-brown)" },
+  dogHeaderContainer: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "20px",
+    marginBottom: "10px",
+  },
+  subtitle: { margin: 0, color: "var(--light-brown)" },
   loading: { color: "#777", fontSize: "1rem" },
   noDogsContainer: { textAlign: "center", paddingTop: "40px" },
   noDogs: { color: "#777", fontSize: "1.1rem", marginBottom: "20px" },
@@ -112,9 +137,9 @@ const styles = {
     backgroundColor: "var(--yellow)",
     color: "white",
     border: "none",
-    padding: "12px 24px",
+    padding: "10px 20px",
     borderRadius: "8px",
-    fontSize: "1rem",
+    fontSize: "0.95rem",
     cursor: "pointer",
     fontWeight: "bold",
   },
