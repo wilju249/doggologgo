@@ -1,4 +1,4 @@
-const CACHE_NAME = "doggologgo-v1";
+const CACHE_NAME = "doggologgo-v2";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
@@ -9,31 +9,44 @@ const ASSETS_TO_CACHE = [
 
 self.addEventListener("install", (event) => {
   console.log("Service Worker installed");
+  self.skipWaiting(); // Force immediate activation
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log("Caching assets");
       return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
         console.log("Cache failed for some assets (expected in dev):", err);
-        // Don't fail install if some assets aren't available yet
         return Promise.resolve();
       });
     })
   );
 });
 
+self.addEventListener("activate", (event) => {
+  console.log("Service Worker activated");
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log("Deleting old cache:", cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+  self.clients.claim(); // Take control immediately
+});
+
 self.addEventListener("fetch", (event) => {
-  // Network-first strategy for HTML, cache-first for assets
   const { request } = event;
-  const url = new URL(request.url);
 
   if (request.mode === "navigate") {
-    // For HTML navigation requests, try network first
     event.respondWith(
       fetch(request)
         .catch(() => caches.match("/index.html"))
     );
   } else {
-    // For other assets (CSS, JS, images), try cache first
     event.respondWith(
       caches.match(request).then((response) => {
         return response || fetch(request);
