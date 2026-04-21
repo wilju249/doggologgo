@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import FeedingGraph from "../components/FeedingGraph";
 import GraphPlaceholder from "../components/GraphPlaceholder";
 import { supabase } from "../lib/supabaseClient";
 import { uploadDogPhoto, getPublicUrl, listDogPhotos } from "../lib/storageClient";
@@ -15,6 +16,41 @@ export default function DogPage() {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState("");
   const [feedingEvents, setFeedingEvents] = useState([]);
+  const [feedingRecords, setFeedingRecords] = useState([]);
+
+  useEffect(() => {
+    const fetchFeedingRecords = async () => {
+      try {
+        if (!dog?.id) return;
+
+        // Get today's date range
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const { data, error } = await supabase
+          .from("feeding_records")
+          .select("*")
+          .eq("dog_id", dog.id)
+          .gte("timestamp", today.toISOString())
+          .lt("timestamp", tomorrow.toISOString())
+          .order("timestamp", { ascending: true });
+
+        if (error) {
+          console.error("Error fetching feeding records:", error);
+        } else {
+          setFeedingRecords(data || []);
+        }
+      } catch (err) {
+        console.error("Fetch feeding records error:", err);
+      }
+    };
+
+    if (dog?.id) {
+      fetchFeedingRecords();
+    }
+  }, [dog?.id]);
 
   useEffect(() => {
     const fetchDog = async () => {
@@ -96,17 +132,6 @@ export default function DogPage() {
       return placeholder;
     }
   }
-
-  const listBucketFiles = async () => {
-    try {
-      const { data, error } = await supabase.storage.from("dogs").list("", { limit: 100 });
-      console.debug("[Storage list] data:", data, "error:", error);
-      alert("Listed bucket files to console (check DevTools)");
-    } catch (err) {
-      console.error("[Storage list] failed:", err);
-      alert("Storage list failed - check console");
-    }
-  };
 
   const handleEditToggle = () => {
     if (!editMode && dog) {
@@ -257,13 +282,10 @@ export default function DogPage() {
                     <button onClick={handleDelete} style={styles.deleteBtn} disabled={loading}>
                       Delete
                     </button>
-                    <button onClick={listBucketFiles} style={styles.debugBtn}>
-                      Debug: list bucket
-                    </button>
                   </div>
 
-                  <GraphPlaceholder title="Food Intake (Last 7 days)" />
-                  <GraphPlaceholder title="Water Intake (Last 7 days)" />
+                  <FeedingGraph feedingRecords={feedingRecords} title="Food Intake (Today)" />
+                  <GraphPlaceholder title="Water Intake (Today)" />
 
                   <div style={styles.feedingSection}>
                     <h2 style={styles.feedingTitle}>Feeding Schedule</h2>
@@ -406,7 +428,6 @@ const styles = {
   cancelBtn: { backgroundColor: "#ccc", color: "#222", border: "none", padding: "8px 12px", borderRadius: "8px", cursor: "pointer" },
   fileInput: { fontSize: "0.9rem", padding: "6px" },
   preview: { marginTop: "10px", maxWidth: "200px", borderRadius: "8px", objectFit: "cover" },
-  debugBtn: { backgroundColor: "#555", color: "white", border: "none", padding: "8px 10px", borderRadius: "8px", cursor: "pointer" },
   feedingSection: { marginTop: "30px", textAlign: "left" },
   feedingTitle: { color: "var(--brown)", marginBottom: "10px" },
   feedingDesc: { color: "#666", fontSize: "0.9rem", marginBottom: "15px" },
