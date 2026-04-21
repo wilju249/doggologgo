@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from "react";
 
 export default function FeedingGraph({ feedingRecords, title = "Food Intake (Today)" }) {
-  const [hoveredBar, setHoveredBar] = useState(null);
+  const [selectedBar, setSelectedBar] = useState(null);
   const [bars, setBars] = useState([]);
   const [maxAmount, setMaxAmount] = useState(100);
 
   useEffect(() => {
-    // Filter only "eating" event types and sort by timestamp
-    const eatingRecords = (feedingRecords || [])
+    if (!feedingRecords || feedingRecords.length === 0) {
+      setBars([]);
+      setMaxAmount(100);
+      return;
+    }
+
+    // Filter only "eating" event types
+    const eatingRecords = feedingRecords
       .filter((r) => r.event_type === "eating")
       .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
@@ -21,20 +27,22 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
     const max = Math.max(...eatingRecords.map((r) => r.amount_grams || 0));
     setMaxAmount(max > 0 ? Math.ceil(max * 1.1) : 100); // 10% padding
 
-    // Create bar data with time formatting
+    // Create bar data
     const barData = eatingRecords.map((record) => {
       const date = new Date(record.timestamp);
-      const time = date.toLocaleTimeString("en-US", {
+      const totalSeconds = date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
+      const timeStr = date.toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
-        hour12: true,
+        second: "2-digit",
+        hour12: false,
       });
       const weight = record.amount_grams || 0;
 
       return {
         id: record.id,
-        time,
-        timestamp: record.timestamp,
+        timeStr,
+        totalSeconds,
         weight,
         height: (weight / (max > 0 ? max : 100)) * 100, // percentage for SVG
       };
@@ -52,11 +60,33 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
     );
   }
 
-  const BAR_WIDTH = 40;
-  const GAP = 20;
+  // 24-hour timeline (86400 seconds in a day)
+  const CHART_WIDTH = 800;
   const CHART_HEIGHT = 200;
-  const SVG_WIDTH = bars.length * (BAR_WIDTH + GAP) + 60;
-  const SVG_HEIGHT = CHART_HEIGHT + 80;
+  const PADDING_LEFT = 50;
+  const PADDING_RIGHT = 20;
+  const PADDING_TOP = 20;
+  const PADDING_BOTTOM = 40;
+  const SVG_WIDTH = PADDING_LEFT + CHART_WIDTH + PADDING_RIGHT;
+  const SVG_HEIGHT = PADDING_TOP + CHART_HEIGHT + PADDING_BOTTOM;
+
+  const pxPerSecond = CHART_WIDTH / 86400; // pixels per second (24 hours)
+
+  // Helper to get x position from seconds since midnight
+  const getXPos = (totalSeconds) => {
+    return PADDING_LEFT + totalSeconds * pxPerSecond;
+  };
+
+  // X-axis time labels (12 AM, 6 AM, 12 PM, 6 PM, 12 AM)
+  const timeLabels = [
+    { seconds: 0, label: "12 AM" },
+    { seconds: 6 * 3600, label: "6 AM" },
+    { seconds: 12 * 3600, label: "12 PM" },
+    { seconds: 18 * 3600, label: "6 PM" },
+    { seconds: 24 * 3600, label: "12 AM" },
+  ];
+
+  const selectedBarData = selectedBar ? bars.find((b) => b.id === selectedBar) : null;
 
   return (
     <div style={styles.container}>
@@ -64,62 +94,55 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
       <div style={styles.graphWrapper}>
         <svg width={SVG_WIDTH} height={SVG_HEIGHT} style={styles.svg}>
           {/* Y-axis */}
-          <line x1="50" y1="20" x2="50" y2="220" stroke="#ccc" strokeWidth="1" />
+          <line x1={PADDING_LEFT} y1={PADDING_TOP} x2={PADDING_LEFT} y2={PADDING_TOP + CHART_HEIGHT} stroke="#ccc" strokeWidth="1" />
 
-          {/* Y-axis labels */}
-          {[0, 25, 50, 75, 100].map((percent) => {
-            const y = 220 - (percent / 100) * CHART_HEIGHT;
-            const value = Math.round((percent / 100) * maxAmount);
+          {/* X-axis */}
+          <line x1={PADDING_LEFT} y1={PADDING_TOP + CHART_HEIGHT} x2={PADDING_LEFT + CHART_WIDTH} y2={PADDING_TOP + CHART_HEIGHT} stroke="#ccc" strokeWidth="1" />
+
+          {/* X-axis time labels */}
+          {timeLabels.map((label) => {
+            const x = getXPos(label.seconds);
             return (
-              <g key={`label-${percent}`}>
-                <text x="35" y={y + 4} fontSize="10" textAnchor="end" fill="#666">
-                  {value}g
+              <g key={`time-label-${label.seconds}`}>
+                <line x1={x} y1={PADDING_TOP + CHART_HEIGHT} x2={x} y2={PADDING_TOP + CHART_HEIGHT + 5} stroke="#ccc" strokeWidth="1" />
+                <text x={x} y={PADDING_TOP + CHART_HEIGHT + 20} fontSize="11" textAnchor="middle" fill="#666">
+                  {label.label}
                 </text>
-                <line x1="45" y1={y} x2="50" y2={y} stroke="#ddd" strokeWidth="1" />
               </g>
             );
           })}
 
           {/* Bars */}
-          {bars.map((bar, index) => {
-            const x = 60 + index * (BAR_WIDTH + GAP);
+          {bars.map((bar) => {
+            const x = getXPos(bar.totalSeconds);
             const barHeight = (bar.height / 100) * CHART_HEIGHT;
-            const y = 220 - barHeight;
-            const isHovered = hoveredBar === bar.id;
+            const y = PADDING_TOP + CHART_HEIGHT - barHeight;
+            const isSelected = selectedBar === bar.id;
 
             return (
               <g key={bar.id}>
                 <rect
-                  x={x}
+                  x={x - 15}
                   y={y}
-                  width={BAR_WIDTH}
+                  width={30}
                   height={barHeight}
-                  fill={isHovered ? "var(--orange)" : "var(--yellow)"}
-                  stroke={isHovered ? "#d39600" : "#f39a20"}
+                  fill={isSelected ? "var(--orange)" : "var(--yellow)"}
+                  stroke={isSelected ? "#d39600" : "#f39a20"}
                   strokeWidth="2"
                   style={{ cursor: "pointer", transition: "fill 0.2s" }}
-                  onMouseEnter={() => setHoveredBar(bar.id)}
-                  onMouseLeave={() => setHoveredBar(null)}
+                  onClick={() => setSelectedBar(isSelected ? null : bar.id)}
                 />
-                {/* Bar label (time) */}
-                <text x={x + BAR_WIDTH / 2} y="240" fontSize="11" textAnchor="middle" fill="#666">
-                  {bar.time}
-                </text>
               </g>
             );
           })}
         </svg>
 
-        {/* Hover tooltip */}
-        {hoveredBar && (
+        {/* Click tooltip */}
+        {selectedBarData && (
           <div style={styles.tooltip}>
-            {bars.find((b) => b.id === hoveredBar) && (
-              <>
-                <strong>{bars.find((b) => b.id === hoveredBar).weight}g</strong>
-                <br />
-                {bars.find((b) => b.id === hoveredBar).time}
-              </>
-            )}
+            <strong>{selectedBarData.weight}g</strong>
+            <br />
+            {selectedBarData.timeStr}
           </div>
         )}
       </div>
