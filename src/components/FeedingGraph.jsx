@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 export default function FeedingGraph({ feedingRecords, title = "Food Intake (Today)" }) {
   const [selectedBar, setSelectedBar] = useState(null);
@@ -7,6 +7,7 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [totalSum, setTotalSum] = useState(0);
   const [viewMode, setViewMode] = useState("daily"); // 'daily' or 'weekly'
+  const wrapperRef = useRef(null);
 
   useEffect(() => {
     if (!feedingRecords || feedingRecords.length === 0) {
@@ -193,19 +194,47 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
 
   const selectedBarData = selectedBar ? bars.find((b) => b.id === selectedBar) : null;
 
+  // when switching to weekly, scroll wrapper to show the latest day on the right
+  useEffect(() => {
+    if (!wrapperRef.current) return;
+    if (viewMode === "weekly") {
+      // schedule after layout
+      setTimeout(() => {
+        try {
+          wrapperRef.current.scrollLeft = wrapperRef.current.scrollWidth;
+        } catch (e) {
+          /* ignore */
+        }
+      }, 0);
+    } else {
+      // scroll back left for daily
+      setTimeout(() => {
+        try {
+          wrapperRef.current.scrollLeft = 0;
+        } catch (e) {}
+      }, 0);
+    }
+  }, [viewMode, bars]);
+
   return (
     <div style={styles.container}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3 style={styles.title}>{title}</h3>
         <div>
           <label style={{ marginRight: 8, color: "var(--brown)", fontWeight: 600 }}>View:</label>
-          <select value={viewMode} onChange={(e) => setViewMode(e.target.value)}>
+          <select
+            value={viewMode}
+            onChange={(e) => {
+              setViewMode(e.target.value);
+              setSelectedBar(null);
+            }}
+          >
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
           </select>
         </div>
       </div>
-      <div style={styles.graphWrapper}>
+      <div style={styles.graphWrapper} ref={wrapperRef}>
         <svg width={SVG_WIDTH} height={SVG_HEIGHT} style={styles.svg}>
           {/* Y-axis */}
           <line x1={PADDING_LEFT} y1={PADDING_TOP} x2={PADDING_LEFT} y2={PADDING_TOP + CHART_HEIGHT} stroke="#ccc" strokeWidth="1" />
@@ -234,7 +263,7 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
               x = getXPos(bar.totalSeconds);
               barWidth = 7.5;
             } else {
-              // weekly: spread 7 bars evenly
+              // weekly: spread 7 bars evenly (oldest index 0 on left, newest index 6 on right)
               const slotWidth = CHART_WIDTH / 7;
               x = PADDING_LEFT + slotWidth * bar.dayIndex + slotWidth / 2;
               barWidth = Math.max(12, slotWidth * 0.6);
@@ -249,8 +278,8 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
                 setSelectedBar(null);
               } else {
                 setSelectedBar(bar.id);
-                // center tooltip vertically in graph area
-                setTooltipPos({ x, y: PADDING_TOP + CHART_HEIGHT / 2 });
+                // set tooltip x so it positions over the clicked bar; vertical centering handled by CSS
+                setTooltipPos({ x });
               }
             };
 
@@ -281,15 +310,15 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
         {selectedBarData && (
           <div
             style={{
-                ...styles.tooltip,
-                left: `${tooltipPos.x}px`,
-                top: `50%`,
-                transform: "translate(-50%, -50%)",
-              }}
+              ...styles.tooltip,
+              left: `${tooltipPos.x}px`,
+              top: `50%`,
+              transform: "translate(-50%, -50%)",
+            }}
           >
             <strong>{selectedBarData.weight}g</strong>
             <br />
-            {selectedBarData.timeStr}
+            {viewMode === "weekly" ? selectedBarData.timeStr : selectedBarData.timeStr}
           </div>
         )}
       </div>
