@@ -27,34 +27,69 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
       return;
     }
 
-    // Aggregate by minute (HH:MM)
-    const groups = new Map();
+    // Cluster events into non-overlapping 10-minute windows starting at the first event of each cluster.
+    // We treat the window as [start, start + 10 minutes) so an event exactly 10 minutes after start belongs to next cluster.
+    const clusters = [];
+    let current = null;
     let total = 0;
-    for (const record of eatingRecords) {
-      const d = new Date(record.timestamp);
-      const hh = String(d.getHours()).padStart(2, "0");
-      const mm = String(d.getMinutes()).padStart(2, "0");
-      const key = `${hh}:${mm}`;
-      const secondsSinceMidnight = d.getHours() * 3600 + d.getMinutes() * 60; // start of minute
-      const weight = record.amount_g || 0;
+
+    for (const rec of eatingRecords) {
+      const d = new Date(rec.timestamp);
+      const weight = rec.amount_g || 0;
       total += weight;
+      const seconds = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
 
-      if (!groups.has(key)) groups.set(key, { key, seconds: secondsSinceMidnight, weight: 0 });
-      groups.get(key).weight += weight;
+      if (!current) {
+        current = {
+          startTs: d,
+          endTs: d,
+          startSeconds: d.getHours() * 3600 + d.getMinutes() * 60,
+          endSeconds: d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(),
+          weight: weight,
+        };
+        continue;
+      }
+
+      const windowStart = current.startTs.getTime();
+      const tenMin = 10 * 60 * 1000;
+      if (d.getTime() < windowStart + tenMin) {
+        // include in current cluster
+        current.endTs = d;
+        current.endSeconds = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+        current.weight += weight;
+      } else {
+        // close current and start new
+        clusters.push(current);
+        current = {
+          startTs: d,
+          endTs: d,
+          startSeconds: d.getHours() * 3600 + d.getMinutes() * 60,
+          endSeconds: d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(),
+          weight: weight,
+        };
+      }
     }
+    if (current) clusters.push(current);
 
-    const grouped = Array.from(groups.values()).sort((a, b) => a.seconds - b.seconds);
-
-    const max = Math.max(...grouped.map((g) => g.weight || 0));
+    // Build bar data from clusters
+    const max = clusters.length ? Math.max(...clusters.map((c) => c.weight || 0)) : 0;
     setMaxAmount(max > 0 ? Math.ceil(max * 1.1) : 100);
 
-    const barData = grouped.map((g, idx) => ({
-      id: `${g.key}-${idx}`,
-      timeStr: g.key,
-      totalSeconds: g.seconds,
-      weight: g.weight,
-      height: (g.weight / (max > 0 ? max : 100)) * 100,
-    }));
+    const barData = clusters.map((c, idx) => {
+      const startHH = String(c.startTs.getHours()).padStart(2, "0");
+      const startMM = String(c.startTs.getMinutes()).padStart(2, "0");
+      const endHH = String(c.endTs.getHours()).padStart(2, "0");
+      const endMM = String(c.endTs.getMinutes()).padStart(2, "0");
+      const label = c.startTs.getTime() === c.endTs.getTime() ? `${startHH}:${startMM}` : `${startHH}:${startMM} - ${endHH}:${endMM}`;
+      return {
+        id: `${startHH}${startMM}-${idx}`,
+        timeStr: label,
+        // position bar at cluster start
+        totalSeconds: c.startSeconds,
+        weight: c.weight,
+        height: (c.weight / (max > 0 ? max : 100)) * 100,
+      };
+    });
 
     setBars(barData);
     setTotalSum(total);
