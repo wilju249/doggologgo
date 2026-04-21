@@ -6,6 +6,7 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
   const [maxAmount, setMaxAmount] = useState(100);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [totalSum, setTotalSum] = useState(0);
+  const [viewMode, setViewMode] = useState("daily"); // 'daily' or 'weekly'
 
   useEffect(() => {
     if (!feedingRecords || feedingRecords.length === 0) {
@@ -27,76 +28,132 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
       return;
     }
 
-    // Cluster events into non-overlapping 10-minute windows starting at the first event of each cluster.
-    // We treat the window as [start, start + 10 minutes) so an event exactly 10 minutes after start belongs to next cluster.
-    const clusters = [];
-    let current = null;
+    // we support two modes: daily (existing behavior) and weekly (7-day totals)
     let total = 0;
+    if (viewMode === "daily") {
+      // Cluster events into non-overlapping 10-minute windows starting at the first event of each cluster.
+      // We treat the window as [start, start + 10 minutes) so an event exactly 10 minutes after start belongs to next cluster.
+      const clusters = [];
+      let current = null;
 
-    for (const rec of eatingRecords) {
-      const d = new Date(rec.timestamp);
-      const weight = rec.amount_g || 0;
-      total += weight;
-      const seconds = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+      for (const rec of eatingRecords) {
+        const d = new Date(rec.timestamp);
+        const weight = rec.amount_g || 0;
+        total += weight;
 
-      if (!current) {
-        current = {
-          startTs: d,
-          endTs: d,
-          startSeconds: d.getHours() * 3600 + d.getMinutes() * 60,
-          endSeconds: d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(),
-          weight: weight,
+        if (!current) {
+          current = {
+            startTs: d,
+            endTs: d,
+            startSeconds: d.getHours() * 3600 + d.getMinutes() * 60,
+            endSeconds: d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(),
+            weight: weight,
+          };
+          continue;
+        }
+
+        const windowStart = current.startTs.getTime();
+        const tenMin = 10 * 60 * 1000;
+        if (d.getTime() < windowStart + tenMin) {
+          // include in current cluster
+          current.endTs = d;
+          current.endSeconds = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+          current.weight += weight;
+        } else {
+          // close current and start new
+          clusters.push(current);
+          current = {
+            startTs: d,
+            endTs: d,
+            startSeconds: d.getHours() * 3600 + d.getMinutes() * 60,
+            endSeconds: d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(),
+            weight: weight,
+          };
+        }
+      }
+      if (current) clusters.push(current);
+
+      // Build bar data from clusters
+      const max = clusters.length ? Math.max(...clusters.map((c) => c.weight || 0)) : 0;
+      setMaxAmount(max > 0 ? Math.ceil(max * 1.1) : 100);
+
+      const barData = clusters.map((c, idx) => {
+        const startHH = String(c.startTs.getHours()).padStart(2, "0");
+        const startMM = String(c.startTs.getMinutes()).padStart(2, "0");
+        const endHH = String(c.endTs.getHours()).padStart(2, "0");
+        const endMM = String(c.endTs.getMinutes()).padStart(2, "0");
+        const label = c.startTs.getTime() === c.endTs.getTime() ? `${startHH}:${startMM}` : `${startHH}:${startMM} - ${endHH}:${endMM}`;
+        const rawWeight = c.weight || 0;
+        const roundedWeight = Math.round(rawWeight);
+        // height should be calculated from raw weight, rounding only affects displayed numbers
+        const height = (rawWeight / (max > 0 ? max : 100)) * 100;
+        return {
+          id: `${startHH}${startMM}-${idx}`,
+          timeStr: label,
+          // position bar at cluster start (seconds since midnight)
+          totalSeconds: c.startSeconds,
+          weight: roundedWeight,
+          height,
         };
-        continue;
+      });
+
+      setBars(barData);
+      setTotalSum(total);
+    } else {
+      // weekly mode: build last 7 days (including today) totals
+      const today = new Date();
+      // normalize today's midnight
+      const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+
+      const dayBuckets = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(startOfToday.getTime() - i * 24 * 3600 * 1000);
+        const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+        const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+        dayBuckets.push({ start, end, sum: 0 });
       }
 
-      const windowStart = current.startTs.getTime();
-      const tenMin = 10 * 60 * 1000;
-      if (d.getTime() < windowStart + tenMin) {
-        // include in current cluster
-        current.endTs = d;
-        current.endSeconds = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
-        current.weight += weight;
-      } else {
-        // close current and start new
-        clusters.push(current);
-        current = {
-          startTs: d,
-          endTs: d,
-          startSeconds: d.getHours() * 3600 + d.getMinutes() * 60,
-          endSeconds: d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(),
-          weight: weight,
-        };
+      for (const rec of eatingRecords) {
+        const ts = new Date(rec.timestamp).getTime();
+        const w = rec.amount_g || 0;
+        for (const bucket of dayBuckets) {
+          if (ts >= bucket.start.getTime() && ts <= bucket.end.getTime()) {
+            bucket.sum += w;
+            break;
+          }
+        }
       }
+
+      // compute max for scaling
+      const max = dayBuckets.length ? Math.max(...dayBuckets.map((b) => b.sum || 0)) : 0;
+      setMaxAmount(max > 0 ? Math.ceil(max * 1.1) : 100);
+
+      // build barData: index 0..6
+      const barData = dayBuckets.map((b, idx) => {
+        const labelDate = b.start;
+        const weekday = labelDate.toLocaleDateString(undefined, { weekday: "short" });
+        const mmdd = labelDate.toLocaleDateString(undefined, { month: "2-digit", day: "2-digit" });
+        const label = `${weekday} ${mmdd}`;
+        const raw = b.sum || 0;
+        const rounded = Math.round(raw);
+        const height = (raw / (max > 0 ? max : 100)) * 100;
+        return {
+          id: `day-${idx}`,
+          timeStr: label,
+          // for weekly, store an index for x placement
+          dayIndex: idx,
+          raw: raw,
+          weight: rounded,
+          height,
+        };
+      });
+
+      setBars(barData);
+      // totalSum should still reflect today's total
+      const todayBucket = dayBuckets[dayBuckets.length - 1];
+      setTotalSum(todayBucket ? todayBucket.sum : 0);
     }
-    if (current) clusters.push(current);
-
-    // Build bar data from clusters
-    const max = clusters.length ? Math.max(...clusters.map((c) => c.weight || 0)) : 0;
-    setMaxAmount(max > 0 ? Math.ceil(max * 1.1) : 100);
-
-    const barData = clusters.map((c, idx) => {
-      const startHH = String(c.startTs.getHours()).padStart(2, "0");
-      const startMM = String(c.startTs.getMinutes()).padStart(2, "0");
-      const endHH = String(c.endTs.getHours()).padStart(2, "0");
-      const endMM = String(c.endTs.getMinutes()).padStart(2, "0");
-      const label = c.startTs.getTime() === c.endTs.getTime() ? `${startHH}:${startMM}` : `${startHH}:${startMM} - ${endHH}:${endMM}`;
-      const rawWeight = c.weight || 0;
-      const roundedWeight = Math.round(rawWeight);
-      // height should be calculated from raw weight, rounding only affects displayed numbers
-      const height = (rawWeight / (max > 0 ? max : 100)) * 100;
-      return {
-        id: `${startHH}${startMM}-${idx}`,
-        timeStr: label,
-        // position bar at cluster start
-        totalSeconds: c.startSeconds,
-        weight: roundedWeight,
-        height,
-      };
-    });
-
-    setBars(barData);
-    setTotalSum(total);
   }, [feedingRecords]);
 
   if (bars.length === 0) {
@@ -138,7 +195,16 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
 
   return (
     <div style={styles.container}>
-      <h3 style={styles.title}>{title}</h3>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h3 style={styles.title}>{title}</h3>
+        <div>
+          <label style={{ marginRight: 8, color: "var(--brown)", fontWeight: 600 }}>View:</label>
+          <select value={viewMode} onChange={(e) => setViewMode(e.target.value)}>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </div>
+      </div>
       <div style={styles.graphWrapper}>
         <svg width={SVG_WIDTH} height={SVG_HEIGHT} style={styles.svg}>
           {/* Y-axis */}
@@ -161,8 +227,19 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
           })}
 
           {/* Bars */}
-          {bars.map((bar) => {
-            const x = getXPos(bar.totalSeconds);
+          {bars.map((bar, idx) => {
+            let x = PADDING_LEFT;
+            let barWidth = 7.5;
+            if (viewMode === "daily") {
+              x = getXPos(bar.totalSeconds);
+              barWidth = 7.5;
+            } else {
+              // weekly: spread 7 bars evenly
+              const slotWidth = CHART_WIDTH / 7;
+              x = PADDING_LEFT + slotWidth * bar.dayIndex + slotWidth / 2;
+              barWidth = Math.max(12, slotWidth * 0.6);
+            }
+
             const barHeight = (bar.height / 100) * CHART_HEIGHT;
             const y = PADDING_TOP + CHART_HEIGHT - barHeight;
             const isSelected = selectedBar === bar.id;
@@ -172,17 +249,17 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
                 setSelectedBar(null);
               } else {
                 setSelectedBar(bar.id);
-                // Calculate position relative to graph wrapper
-                setTooltipPos({ x, y: y - 10 });
+                // center tooltip vertically in graph area
+                setTooltipPos({ x, y: PADDING_TOP + CHART_HEIGHT / 2 });
               }
             };
 
             return (
               <g key={bar.id}>
                 <rect
-                  x={x - 3.75}
+                  x={x - barWidth / 2}
                   y={y}
-                  width={7.5}
+                  width={barWidth}
                   height={barHeight}
                   fill={isSelected ? "var(--orange)" : "var(--yellow)"}
                   stroke={isSelected ? "#d39600" : "#f39a20"}
@@ -190,6 +267,11 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
                   style={{ cursor: "pointer", transition: "fill 0.2s" }}
                   onClick={handleBarClick}
                 />
+                {viewMode === "weekly" && (
+                  <text x={x} y={PADDING_TOP + CHART_HEIGHT + 32} fontSize="11" textAnchor="middle" fill="#666">
+                    {bar.timeStr.split(" ")[0]}
+                  </text>
+                )}
               </g>
             );
           })}
@@ -212,7 +294,7 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
         )}
       </div>
       {/* Total amount eaten (outside scrollable graph) */}
-      <div style={styles.total}>Total amount eaten: {Math.round(totalSum) || 0}g</div>
+      <div style={styles.total}>Total amount eaten today: {Math.round(totalSum) || 0}g</div>
     </div>
   );
 }
