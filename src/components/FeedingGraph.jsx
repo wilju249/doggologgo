@@ -24,7 +24,7 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
     }
 
     // Find max amount for y-axis scaling
-    const max = Math.max(...eatingRecords.map((r) => r.amount_grams || 0));
+    const max = Math.max(...eatingRecords.map((r) => r.amount_g || 0));
     setMaxAmount(max > 0 ? Math.ceil(max * 1.1) : 100); // 10% padding
 
     // Create bar data
@@ -37,7 +37,7 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
         second: "2-digit",
         hour12: false,
       });
-      const weight = record.amount_grams || 0;
+      const weight = record.amount_g || 0;
 
       return {
         id: record.id,
