@@ -50,6 +50,24 @@ export default function DogPage() {
     if (dog?.id) {
       fetchFeedingRecords();
 
+      // Subscribe to realtime updates for this dog's feeding records
+      const subscription = supabase
+        .channel(`feeding_records:dog_id=eq.${dog.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "feeding_records",
+            filter: `dog_id=eq.${dog.id}`,
+          },
+          (payload) => {
+            // Refetch to ensure we get today's records only
+            fetchFeedingRecords();
+          }
+        )
+        .subscribe();
+
       // Set up timer to refetch at midnight
       const now = new Date();
       const midnight = new Date(now);
@@ -63,7 +81,10 @@ export default function DogPage() {
         setInterval(fetchFeedingRecords, 24 * 60 * 60 * 1000);
       }, timeUntilMidnight);
 
-      return () => clearTimeout(midnightTimer);
+      return () => {
+        clearTimeout(midnightTimer);
+        subscription.unsubscribe();
+      };
     }
   }, [dog?.id]);
 
