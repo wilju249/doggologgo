@@ -49,6 +49,21 @@ export default function DogPage() {
 
     if (dog?.id) {
       fetchFeedingRecords();
+
+      // Set up timer to refetch at midnight
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setDate(midnight.getDate() + 1);
+      midnight.setHours(0, 0, 0, 0);
+
+      const timeUntilMidnight = midnight.getTime() - now.getTime();
+      const midnightTimer = setTimeout(() => {
+        fetchFeedingRecords(); // Refetch at midnight
+        // Then set the interval to refetch every 24 hours
+        setInterval(fetchFeedingRecords, 24 * 60 * 60 * 1000);
+      }, timeUntilMidnight);
+
+      return () => clearTimeout(midnightTimer);
     }
   }, [dog?.id]);
 
