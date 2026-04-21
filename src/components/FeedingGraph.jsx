@@ -81,13 +81,17 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
       const endHH = String(c.endTs.getHours()).padStart(2, "0");
       const endMM = String(c.endTs.getMinutes()).padStart(2, "0");
       const label = c.startTs.getTime() === c.endTs.getTime() ? `${startHH}:${startMM}` : `${startHH}:${startMM} - ${endHH}:${endMM}`;
+      const rawWeight = c.weight || 0;
+      const roundedWeight = Math.round(rawWeight);
+      // height should be calculated from raw weight, rounding only affects displayed numbers
+      const height = (rawWeight / (max > 0 ? max : 100)) * 100;
       return {
         id: `${startHH}${startMM}-${idx}`,
         timeStr: label,
         // position bar at cluster start
         totalSeconds: c.startSeconds,
-        weight: c.weight,
-        height: (c.weight / (max > 0 ? max : 100)) * 100,
+        weight: roundedWeight,
+        height,
       };
     });
 
@@ -195,20 +199,20 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
         {selectedBarData && (
           <div
             style={{
-              ...styles.tooltip,
-              left: `${tooltipPos.x}px`,
-              top: `${tooltipPos.y}px`,
-              transform: "translate(-50%, -100%)",
-            }}
+                ...styles.tooltip,
+                left: `${tooltipPos.x}px`,
+                top: `50%`,
+                transform: "translate(-50%, -50%)",
+              }}
           >
             <strong>{selectedBarData.weight}g</strong>
             <br />
             {selectedBarData.timeStr}
           </div>
         )}
-        {/* Total amount eaten */}
-        <div style={styles.total}>Total amount eaten: {totalSum || 0}g</div>
       </div>
+      {/* Total amount eaten (outside scrollable graph) */}
+      <div style={styles.total}>Total amount eaten: {Math.round(totalSum) || 0}g</div>
     </div>
   );
 }
