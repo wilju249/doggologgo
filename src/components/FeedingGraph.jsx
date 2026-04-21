@@ -4,6 +4,7 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
   const [selectedBar, setSelectedBar] = useState(null);
   const [bars, setBars] = useState([]);
   const [maxAmount, setMaxAmount] = useState(100);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (!feedingRecords || feedingRecords.length === 0) {
@@ -119,6 +120,16 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
             const y = PADDING_TOP + CHART_HEIGHT - barHeight;
             const isSelected = selectedBar === bar.id;
 
+            const handleBarClick = () => {
+              if (isSelected) {
+                setSelectedBar(null);
+              } else {
+                setSelectedBar(bar.id);
+                // Calculate position relative to graph wrapper
+                setTooltipPos({ x, y: y - 10 });
+              }
+            };
+
             return (
               <g key={bar.id}>
                 <rect
@@ -130,7 +141,7 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
                   stroke={isSelected ? "#d39600" : "#f39a20"}
                   strokeWidth="2"
                   style={{ cursor: "pointer", transition: "fill 0.2s" }}
-                  onClick={() => setSelectedBar(isSelected ? null : bar.id)}
+                  onClick={handleBarClick}
                 />
               </g>
             );
@@ -139,7 +150,14 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
 
         {/* Click tooltip */}
         {selectedBarData && (
-          <div style={styles.tooltip}>
+          <div
+            style={{
+              ...styles.tooltip,
+              left: `${tooltipPos.x}px`,
+              top: `${tooltipPos.y}px`,
+              transform: "translate(-50%, -100%)",
+            }}
+          >
             <strong>{selectedBarData.weight}g</strong>
             <br />
             {selectedBarData.timeStr}
@@ -183,9 +201,6 @@ const styles = {
     fontSize: "0.85rem",
     pointerEvents: "none",
     whiteSpace: "nowrap",
-    bottom: "40px",
-    left: "50%",
-    transform: "translateX(-50%)",
     zIndex: 10,
   },
 };
