@@ -5,11 +5,13 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
   const [bars, setBars] = useState([]);
   const [maxAmount, setMaxAmount] = useState(100);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [totalSum, setTotalSum] = useState(0);
 
   useEffect(() => {
     if (!feedingRecords || feedingRecords.length === 0) {
       setBars([]);
       setMaxAmount(100);
+      setTotalSum(0);
       return;
     }
 
@@ -21,35 +23,41 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
     if (eatingRecords.length === 0) {
       setBars([]);
       setMaxAmount(100);
+      setTotalSum(0);
       return;
     }
 
-    // Find max amount for y-axis scaling
-    const max = Math.max(...eatingRecords.map((r) => r.amount_g || 0));
-    setMaxAmount(max > 0 ? Math.ceil(max * 1.1) : 100); // 10% padding
-
-    // Create bar data
-    const barData = eatingRecords.map((record) => {
-      const date = new Date(record.timestamp);
-      const totalSeconds = date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds();
-      const timeStr = date.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
+    // Aggregate by minute (HH:MM)
+    const groups = new Map();
+    let total = 0;
+    for (const record of eatingRecords) {
+      const d = new Date(record.timestamp);
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const key = `${hh}:${mm}`;
+      const secondsSinceMidnight = d.getHours() * 3600 + d.getMinutes() * 60; // start of minute
       const weight = record.amount_g || 0;
+      total += weight;
 
-      return {
-        id: record.id,
-        timeStr,
-        totalSeconds,
-        weight,
-        height: (weight / (max > 0 ? max : 100)) * 100, // percentage for SVG
-      };
-    });
+      if (!groups.has(key)) groups.set(key, { key, seconds: secondsSinceMidnight, weight: 0 });
+      groups.get(key).weight += weight;
+    }
+
+    const grouped = Array.from(groups.values()).sort((a, b) => a.seconds - b.seconds);
+
+    const max = Math.max(...grouped.map((g) => g.weight || 0));
+    setMaxAmount(max > 0 ? Math.ceil(max * 1.1) : 100);
+
+    const barData = grouped.map((g, idx) => ({
+      id: `${g.key}-${idx}`,
+      timeStr: g.key,
+      totalSeconds: g.seconds,
+      weight: g.weight,
+      height: (g.weight / (max > 0 ? max : 100)) * 100,
+    }));
 
     setBars(barData);
+    setTotalSum(total);
   }, [feedingRecords]);
 
   if (bars.length === 0) {
@@ -163,6 +171,8 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
             {selectedBarData.timeStr}
           </div>
         )}
+        {/* Total amount eaten */}
+        <div style={styles.total}>Total amount eaten: {totalSum || 0}g</div>
       </div>
     </div>
   );
@@ -202,5 +212,11 @@ const styles = {
     pointerEvents: "none",
     whiteSpace: "nowrap",
     zIndex: 10,
+  },
+  total: {
+    marginTop: "12px",
+    color: "var(--brown)",
+    fontWeight: "600",
+    textAlign: "center",
   },
 };
