@@ -133,9 +133,9 @@ export default function FeedingGraph({ feedingRecords, title = "Food Intake (Tod
             return (
               <g key={bar.id}>
                 <rect
-                  x={x - 15}
+                  x={x - 3.75}
                   y={y}
-                  width={30}
+                  width={7.5}
                   height={barHeight}
                   fill={isSelected ? "var(--orange)" : "var(--yellow)"}
                   stroke={isSelected ? "#d39600" : "#f39a20"}
