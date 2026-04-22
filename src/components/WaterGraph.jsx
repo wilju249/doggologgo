@@ -25,8 +25,8 @@ export default function WaterGraph({ drinkingRecords, title = "Water Intake (Tod
 
     for (const rec of records) {
       const d = new Date(rec.timestamp);
-      // support various amount field names (amount_ml, amount_ml, amount)
-      const amount = rec.amount_ml ?? rec.amount_mL ?? rec.amount || rec.amount_g || 0;
+      // use `amount_g` column from Supabase (treat as milliliters); fall back to `amount`
+      const amount = rec.amount_g ?? rec.amount ?? 0;
       total += amount;
 
       if (!current) {
