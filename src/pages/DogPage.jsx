@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import FeedingGraph from "../components/FeedingGraph";
-import GraphPlaceholder from "../components/GraphPlaceholder";
+import WaterGraph from "../components/WaterGraph";
 import { supabase } from "../lib/supabaseClient";
 import { uploadDogPhoto, getPublicUrl, listDogPhotos } from "../lib/storageClient";
 import Navbar from "../components/Navbar";
@@ -17,6 +17,7 @@ export default function DogPage() {
   const [photoPreview, setPhotoPreview] = useState("");
   const [feedingEvents, setFeedingEvents] = useState([]);
   const [feedingRecords, setFeedingRecords] = useState([]);
+  const [drinkingRecords, setDrinkingRecords] = useState([]);
 
   useEffect(() => {
     const fetchFeedingRecords = async () => {
@@ -79,6 +80,67 @@ export default function DogPage() {
         fetchFeedingRecords(); // Refetch at midnight
         // Then set the interval to refetch every 24 hours
         setInterval(fetchFeedingRecords, 24 * 60 * 60 * 1000);
+      }, timeUntilMidnight);
+
+      return () => {
+        clearTimeout(midnightTimer);
+        subscription.unsubscribe();
+      };
+    }
+  }, [dog?.id]);
+
+  useEffect(() => {
+    const fetchDrinkingRecords = async () => {
+      try {
+        if (!dog?.id) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const { data, error } = await supabase
+          .from("drinking_records")
+          .select("*")
+          .eq("dog_id", dog.id)
+          .gte("timestamp", today.toISOString())
+          .lt("timestamp", tomorrow.toISOString())
+          .order("timestamp", { ascending: true });
+
+        if (error) console.error("Error fetching drinking records:", error);
+        else setDrinkingRecords(data || []);
+      } catch (err) {
+        console.error("Fetch drinking records error:", err);
+      }
+    };
+
+    if (dog?.id) {
+      fetchDrinkingRecords();
+
+      const subscription = supabase
+        .channel(`drinking_records:dog_id=eq.${dog.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "drinking_records",
+            filter: `dog_id=eq.${dog.id}`,
+          },
+          (payload) => {
+            fetchDrinkingRecords();
+          }
+        )
+        .subscribe();
+
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setDate(midnight.getDate() + 1);
+      midnight.setHours(0, 0, 0, 0);
+      const timeUntilMidnight = midnight.getTime() - now.getTime();
+      const midnightTimer = setTimeout(() => {
+        fetchDrinkingRecords();
+        setInterval(fetchDrinkingRecords, 24 * 60 * 60 * 1000);
       }, timeUntilMidnight);
 
       return () => {
@@ -321,7 +383,7 @@ export default function DogPage() {
                   </div>
 
                   <FeedingGraph feedingRecords={feedingRecords} title="Food Intake (Today)" />
-                  <GraphPlaceholder title="Water Intake (Today)" />
+                  <WaterGraph drinkingRecords={drinkingRecords} title="Water Intake (Today)" />
 
                   <div style={styles.feedingSection}>
                     <h2 style={styles.feedingTitle}>Feeding Schedule</h2>
