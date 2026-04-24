@@ -63,13 +63,11 @@ export default function DogPage() {
             filter: `dog_id=eq.${dog.id}`,
           },
           (payload) => {
-            console.debug(`[DogPage] feeding_records payload:`, payload);
             // Refetch to ensure we get today's records only
             fetchFeedingRecords();
           }
         )
         .subscribe();
-      console.debug(`[DogPage] subscribed to feeding_records for dog=${dog.id}`, subscription);
 
       // Set up timer to refetch at midnight
       const now = new Date();
@@ -79,7 +77,6 @@ export default function DogPage() {
 
       const timeUntilMidnight = midnight.getTime() - now.getTime();
       const midnightTimer = setTimeout(() => {
-        console.debug("[DogPage] midnight refetch feeding records");
         fetchFeedingRecords(); // Refetch at midnight
         // Then set the interval to refetch every 24 hours
         setInterval(fetchFeedingRecords, 24 * 60 * 60 * 1000);
@@ -132,12 +129,11 @@ export default function DogPage() {
             filter: `dog_id=eq.${dog.id}`,
           },
           (payload) => {
-            console.debug(`[DogPage] drinking_records payload:`, payload);
             fetchDrinkingRecords();
           }
         )
         .subscribe();
-      console.debug(`[DogPage] subscribed to drinking_records for dog=${dog.id}`, subscription);
+      
 
       const now = new Date();
       const midnight = new Date(now);
